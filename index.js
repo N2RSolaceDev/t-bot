@@ -10,10 +10,10 @@ import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 
 // Handle __dirname in ES Module
-const __filename = fileURLToPath(import.meta.url);
+const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
@@ -26,7 +26,7 @@ try {
   const templateFiles = fs.readdirSync(templatesDir).filter(file => file.endsWith('.json'));
   for (const file of templateFiles) {
     const name = file.split('.')[0];
-    templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file)));
+    templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
   }
 } catch (err) {
   console.error('Error loading templates:', err.message);
@@ -64,6 +64,7 @@ commands.push(commandData);
 client.commands.set(commandData.name, {
   execute: async interaction => {
     await interaction.deferReply({ ephemeral: true });
+    console.log('Interaction deferred');
 
     const templateName = interaction.options.getString('name');
     const template = templates[templateName];
@@ -116,7 +117,6 @@ async function applyTemplate(guild, template, interaction) {
 
   await interaction.editReply({ embeds: [statusEmbed] });
 
-  // Delay function to avoid rate limit
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   // Delete all roles except @everyone
@@ -124,7 +124,7 @@ async function applyTemplate(guild, template, interaction) {
   for (const [id, role] of roles) {
     try {
       await role.delete();
-      await delay(500); // Rate limit safety
+      await delay(500);
     } catch (e) {
       console.warn(`Could not delete role ${role.name}:`, e.message);
     }
@@ -184,7 +184,7 @@ async function applyTemplate(guild, template, interaction) {
       try {
         const category = await guild.channels.create({
           name: catData.name,
-          type: 4, // Category
+          type: 4,
         });
 
         categoryMap[catData.name] = category;
@@ -229,7 +229,7 @@ async function applyTemplate(guild, template, interaction) {
           permissionOverwrites,
         });
 
-        await delay(1000); // Safety delay
+        await delay(1000);
       } catch (e) {
         console.warn(`Failed to create channel "${chanData.name}":`, e.message);
       }
@@ -259,6 +259,17 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     console.error('Error while refreshing commands:', error);
   }
 })();
+
+// === START WEB SERVER FOR PORT 10000 ===
+const server = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Bot is running\n');
+});
+
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`Server is listening on port ${PORT}`);
+});
 
 // === LOGIN ===
 client.once('ready', () => {
