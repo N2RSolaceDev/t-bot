@@ -11,13 +11,11 @@ import { Routes } from 'discord-api-types/v10';
 import fs from 'fs';
 import path from 'path';
 import { createServer } from 'http';
-import { fileURLToPath } from 'url';
 
 // Handle __dirname in ES Module
-const __filename = fileURLToPath(import.meta.url);
+const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
 dotenv.config();
 
 // Load templates
@@ -66,7 +64,6 @@ commands.push(commandData);
 client.commands.set(commandData.name, {
   execute: async interaction => {
     await interaction.deferReply({ ephemeral: true });
-    console.log(`Interaction deferred for ${interaction.commandName}`);
 
     const templateName = interaction.options.getString('name');
     const template = templates[templateName];
@@ -132,7 +129,7 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// === TEMPLATE APPLY FUNCTION ===
+// === TEMPLATE APPLY FUNCTION (Optimized) ===
 async function applyTemplate(guild, template, interaction) {
   const statusEmbed = new EmbedBuilder()
     .setTitle('🔄 Resetting Server')
@@ -145,25 +142,29 @@ async function applyTemplate(guild, template, interaction) {
 
   // Delete all roles except @everyone
   const roles = guild.roles.cache.filter(r => !r.managed && r.id !== guild.id);
-  for (const [id, role] of roles) {
-    try {
-      await role.delete();
-      await delay(500); // Rate limit safety
-    } catch (e) {
-      console.warn(`Could not delete role ${role.name}:`, e.message);
-    }
-  }
+  await Promise.all(
+    roles.map(async ([id, role]) => {
+      try {
+        await role.delete();
+        await delay(200); // Reduced delay
+      } catch (e) {
+        console.warn(`Could not delete role ${role.name}:`, e.message);
+      }
+    })
+  );
 
   // Delete all channels
   const channels = guild.channels.cache;
-  for (const [id, channel] of channels) {
-    try {
-      await channel.delete();
-      await delay(500);
-    } catch (e) {
-      console.warn(`Could not delete channel ${channel.name}:`, e.message);
-    }
-  }
+  await Promise.all(
+    channels.map(async ([id, channel]) => {
+      try {
+        await channel.delete();
+        await delay(200); // Reduced delay
+      } catch (e) {
+        console.warn(`Could not delete channel ${channel.name}:`, e.message);
+      }
+    })
+  );
 
   // Rebuild Roles
   const createdRoles = {};
@@ -172,27 +173,29 @@ async function applyTemplate(guild, template, interaction) {
   await interaction.editReply({ embeds: [statusEmbed] });
 
   if (template.roles) {
-    for (const roleData of template.roles) {
-      try {
-        const permissions = new PermissionsBitField();
-        if (roleData.permissions) {
-          permissions.add(roleData.permissions);
+    await Promise.all(
+      template.roles.map(async roleData => {
+        try {
+          const permissions = new PermissionsBitField();
+          if (roleData.permissions) {
+            permissions.add(roleData.permissions);
+          }
+
+          const role = await guild.roles.create({
+            name: roleData.name,
+            color: roleData.color || 'White',
+            hoist: roleData.hoist || false,
+            position: roleData.position || 1,
+            permissions: permissions,
+          });
+
+          createdRoles[roleData.name] = role;
+          await delay(200); // Reduced delay
+        } catch (e) {
+          console.warn(`Failed to create role "${roleData.name}":`, e.message);
         }
-
-        const role = await guild.roles.create({
-          name: roleData.name,
-          color: roleData.color || 'White',
-          hoist: roleData.hoist || false,
-          position: roleData.position || 1,
-          permissions: permissions,
-        });
-
-        createdRoles[roleData.name] = role;
-        await delay(500);
-      } catch (e) {
-        console.warn(`Failed to create role "${roleData.name}":`, e.message);
-      }
-    }
+      })
+    );
   }
 
   // Create Categories
@@ -202,19 +205,21 @@ async function applyTemplate(guild, template, interaction) {
   await interaction.editReply({ embeds: [statusEmbed] });
 
   if (template.categories) {
-    for (const catData of template.categories) {
-      try {
-        const category = await guild.channels.create({
-          name: catData.name,
-          type: 4, // Category
-        });
+    await Promise.all(
+      template.categories.map(async catData => {
+        try {
+          const category = await guild.channels.create({
+            name: catData.name,
+            type: 4, // Category
+          });
 
-        categoryMap[catData.name] = category;
-        await delay(1000);
-      } catch (e) {
-        console.warn(`Failed to create category "${catData.name}":`, e.message);
-      }
-    }
+          categoryMap[catData.name] = category;
+          await delay(300);
+        } catch (e) {
+          console.warn(`Failed to create category "${catData.name}":`, e.message);
+        }
+      })
+    );
   }
 
   // Create Channels
@@ -223,40 +228,42 @@ async function applyTemplate(guild, template, interaction) {
   await interaction.editReply({ embeds: [statusEmbed] });
 
   if (template.channels) {
-    for (const chanData of template.channels) {
-      try {
-        let parent = null;
-        if (chanData.parent) {
-          parent = categoryMap[chanData.parent];
-        }
-
-        const permissionOverwrites = [];
-
-        if (chanData.permission_overwrites) {
-          for (const perm of chanData.permission_overwrites) {
-            const role = perm.type === 'role' ? createdRoles[perm.id] : perm.id;
-            if (!role && perm.id !== '@everyone') continue;
-
-            permissionOverwrites.push({
-              id: perm.id === '@everyone' ? guild.id : role.id,
-              deny: perm.deny ? new PermissionsBitField(perm.deny) : [],
-              allow: perm.allow ? new PermissionsBitField(perm.allow) : [],
-            });
+    await Promise.all(
+      template.channels.map(async chanData => {
+        try {
+          let parent = null;
+          if (chanData.parent) {
+            parent = categoryMap[chanData.parent];
           }
+
+          const permissionOverwrites = [];
+
+          if (chanData.permission_overwrites) {
+            for (const perm of chanData.permission_overwrites) {
+              const role = perm.type === 'role' ? createdRoles[perm.id] : perm.id;
+              if (!role && perm.id !== '@everyone') return;
+
+              permissionOverwrites.push({
+                id: perm.id === '@everyone' ? guild.id : role.id,
+                deny: perm.deny ? new PermissionsBitField(perm.deny) : [],
+                allow: perm.allow ? new PermissionsBitField(perm.allow) : [],
+              });
+            }
+          }
+
+          await guild.channels.create({
+            name: chanData.name,
+            type: chanData.type,
+            parent: parent || null,
+            permissionOverwrites,
+          });
+
+          await delay(300);
+        } catch (e) {
+          console.warn(`Failed to create channel "${chanData.name}":`, e.message);
         }
-
-        await guild.channels.create({
-          name: chanData.name,
-          type: chanData.type,
-          parent: parent || null,
-          permissionOverwrites,
-        });
-
-        await delay(1000);
-      } catch (e) {
-        console.warn(`Failed to create channel "${chanData.name}":`, e.message);
-      }
-    }
+      })
+    );
   }
 
   statusEmbed.setTitle('✅ Success')
@@ -272,11 +279,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
   try {
     console.log('Started refreshing application (/) commands globally.');
-
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-      body: commands,
-    });
-
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('Successfully reloaded application commands.');
   } catch (error) {
     console.error('Error while refreshing commands:', error);
