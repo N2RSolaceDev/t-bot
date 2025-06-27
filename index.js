@@ -1,305 +1,157 @@
-import dotenv from 'dotenv';
-import {
-  Client,
-  GatewayIntentBits,
-  PermissionsBitField,
-  EmbedBuilder,
-  Collection,
-} from 'discord.js';
-import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
-import fs from 'fs';
-import path from 'path';
-import { createServer } from 'http';
-
-// Handle __dirname in ES Module
-const __filename = new URL(import.meta.url).pathname;
-const __dirname = path.dirname(__filename);
-
-dotenv.config();
-
-// Load templates
-const templatesDir = path.join(__dirname, 'templates');
-const templates = {};
-
-try {
-  const templateFiles = fs.readdirSync(templatesDir).filter(file => file.endsWith('.json'));
-  for (const file of templateFiles) {
-    const name = file.split('.')[0];
-    templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
-  }
-} catch (err) {
-  console.error('Error loading templates:', err.message);
-}
-
-// === DISCORD CLIENT ===
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-});
-
-client.commands = new Collection();
-
-// === SLASH COMMAND HANDLER ===
-const commands = [];
-
-const commandData = {
-  name: 'template',
-  description: 'Apply a server template to this guild.',
-  options: [
-    {
-      name: 'name',
-      type: 3,
-      description: 'Name of the template to apply.',
-      required: true,
-      choices: Object.keys(templates).map(name => ({ name, value: name })),
-    },
-  ],
-};
-
-commands.push(commandData);
-client.commands.set(commandData.name, {
-  execute: async interaction => {
-    await interaction.deferReply({ ephemeral: true });
-
-    const templateName = interaction.options.getString('name');
-    const template = templates[templateName];
-
-    if (!template) {
-      return interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('❌ Error')
-            .setDescription('Template not found!')
-            .setColor('Red'),
-        ],
-      });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Esports Scene</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
 
-    const guild = interaction.guild;
-    if (!guild) {
-      return interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('❌ Error')
-            .setDescription('This command must be used in a server.')
-            .setColor('Red'),
-        ],
-      });
+    body {
+      background-color: #0d0d0d;
+      color: #00ff00;
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      scroll-behavior: smooth;
     }
 
-    try {
-      await applyTemplate(guild, template, interaction);
-    } catch (error) {
-      console.error('Error applying template:', error);
-      await interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('❌ Error')
-            .setDescription('An error occurred while applying the template.')
-            .setColor('Red'),
-        ],
-      });
+    .container {
+      max-width: 600px;
+      padding: 40px 20px;
+      margin: 50px auto;
     }
-  },
-});
 
-// === LISTEN FOR INTERACTIONS ===
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      color: #0f0;
+      text-shadow: 0 0 5px #0f0, 0 0 10px #0f0;
+    }
 
-  const command = client.commands.get(interaction.commandName);
+    p {
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+      color: #ccc;
+      line-height: 1.6;
+    }
 
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
-    return;
-  }
+    .purpose {
+      max-width: 600px;
+      margin: 30px auto;
+      padding: 20px;
+      background-color: #1a1a1a;
+      border-left: 3px solid #0f0;
+      font-size: 0.95rem;
+      color: #ddd;
+      line-height: 1.6;
+      text-align: left;
+    }
 
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-    await interaction.reply({
-      content: 'There was an error while executing this command!',
-      ephemeral: true,
-    });
-  }
-});
+    .exposed-section {
+      margin-top: 60px;
+    }
 
-// === TEMPLATE APPLY FUNCTION (Optimized) ===
-async function applyTemplate(guild, template, interaction) {
-  const statusEmbed = new EmbedBuilder()
-    .setTitle('🔄 Resetting Server')
-    .setDescription('Deleting all roles and channels...')
-    .setColor('Yellow');
+    .exposed-card {
+      background-color: #111;
+      border: 1px solid #0f0;
+      padding: 20px;
+      border-radius: 6px;
+      margin: 20px auto;
+      max-width: 500px;
+      text-align: left;
+      animation: glow 2s infinite alternate;
+    }
 
-  await interaction.editReply({ embeds: [statusEmbed] });
+    @keyframes glow {
+      from { box-shadow: 0 0 5px #0f0; }
+      to { box-shadow: 0 0 15px #0f0; }
+    }
 
-  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    .exposed-card h2 {
+      color: #0f0;
+      font-size: 1.3rem;
+      margin-bottom: 10px;
+    }
 
-  // Delete all roles except @everyone
-  const roles = guild.roles.cache.filter(r => !r.managed && r.id !== guild.id);
-  await Promise.all(
-    roles.map(async ([id, role]) => {
-      try {
-        await role.delete();
-        await delay(200); // Reduced delay
-      } catch (e) {
-        console.warn(`Could not delete role ${role.name}:`, e.message);
-      }
-    })
-  );
+    .exposed-card p {
+      color: #ccc;
+      font-size: 0.95rem;
+      margin-bottom: 10px;
+    }
 
-  // Delete all channels
-  const channels = guild.channels.cache;
-  await Promise.all(
-    channels.map(async ([id, channel]) => {
-      try {
-        await channel.delete();
-        await delay(200); // Reduced delay
-      } catch (e) {
-        console.warn(`Could not delete channel ${channel.name}:`, e.message);
-      }
-    })
-  );
+    .footer {
+      font-size: 0.9rem;
+      color: #555;
+      margin-top: 60px;
+    }
 
-  // Rebuild Roles
-  const createdRoles = {};
-  statusEmbed.setTitle('🛠️ Creating Roles');
-  statusEmbed.setDescription('Rebuilding roles...');
-  await interaction.editReply({ embeds: [statusEmbed] });
+    a {
+      color: #0f0;
+      text-decoration: none;
+    }
 
-  if (template.roles) {
-    await Promise.all(
-      template.roles.map(async roleData => {
-        try {
-          const permissions = new PermissionsBitField();
-          if (roleData.permissions) {
-            permissions.add(roleData.permissions);
-          }
+    .scroll-hint {
+      text-align: center;
+      font-size: 1rem;
+      color: #aaa;
+      margin-top: 60px;
+      animation: bounce 2s infinite;
+    }
 
-          const role = await guild.roles.create({
-            name: roleData.name,
-            color: roleData.color || 'White',
-            hoist: roleData.hoist || false,
-            position: roleData.position || 1,
-            permissions: permissions,
-          });
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(10px); }
+    }
+  </style>
+</head>
+<body>
 
-          createdRoles[roleData.name] = role;
-          await delay(200); // Reduced delay
-        } catch (e) {
-          console.warn(`Failed to create role "${roleData.name}":`, e.message);
-        }
-      })
-    );
-  }
+  <div class="container">
+    <h1>The Esports Scene</h1>
+    <p>Coming soon — A safe space to expose doxxers, p3dos, trolls, and unethical teams in esports.</p>
 
-  // Create Categories
-  const categoryMap = {};
-  statusEmbed.setTitle('📁 Creating Categories');
-  statusEmbed.setDescription('Setting up categories...');
-  await interaction.editReply({ embeds: [statusEmbed] });
+    <div class="purpose">
+      <strong>Purpose:</strong><br>
+      We're building a platform where players and fans can report toxic behavior — no personal info shared.<br><br>
+      Think someone deserves a spotlight for ruining communities? We’re listening.<br><br>
+      No logs • No ads • No nonsense.
+    </div>
 
-  if (template.categories) {
-    await Promise.all(
-      template.categories.map(async catData => {
-        try {
-          const category = await guild.channels.create({
-            name: catData.name,
-            type: 4, // Category
-          });
+    <!-- Exposed Individual Card -->
+    <section class="exposed-section">
+      <h2>Exposed by Solace</h2>
 
-          categoryMap[catData.name] = category;
-          await delay(300);
-        } catch (e) {
-          console.warn(`Failed to create category "${catData.name}":`, e.message);
-        }
-      })
-    );
-  }
+      <div class="exposed-card">
+        <h2>Melt</h2>
+        <p><strong>Known for:</strong> Fraud, Doxxing, Abuse, P3do Behavior</p>
 
-  // Create Channels
-  statusEmbed.setTitle('💬 Creating Channels');
-  statusEmbed.setDescription('Creating channels under categories...');
-  await interaction.editReply({ embeds: [statusEmbed] });
+        <p>
+          Melt was an esports team owner involved in multiple unethical actions: faking his income, lying about having a job, and using doxxing as leverage to control underage members.
+        </p>
+        <p>
+          He targeted teenagers with threats and harassment to keep them on teams or remove them at will. His behavior created toxic environments under the guise of competitive professionalism.
+        </p>
+        <p>
+          <strong>Outcome:</strong> After being exposed by Solace, further investigation revealed unrelated but severe criminal charges. Melt is now in jail awaiting trial for <strong>armed robbery</strong> and <strong>battery</strong> against his ex-girlfriend.
+        </p>
+      </div>
+    </section>
 
-  if (template.channels) {
-    await Promise.all(
-      template.channels.map(async chanData => {
-        try {
-          let parent = null;
-          if (chanData.parent) {
-            parent = categoryMap[chanData.parent];
-          }
+    <div class="scroll-hint">↓ Stay Tuned ↓</div>
+  </div>
 
-          const permissionOverwrites = [];
+  <p class="footer">
+    hosted at <a href="https://caught.wiki " target="_blank">caught.wiki</a>
+  </p>
 
-          if (chanData.permission_overwrites) {
-            for (const perm of chanData.permission_overwrites) {
-              const role = perm.type === 'role' ? createdRoles[perm.id] : perm.id;
-              if (!role && perm.id !== '@everyone') return;
-
-              permissionOverwrites.push({
-                id: perm.id === '@everyone' ? guild.id : role.id,
-                deny: perm.deny ? new PermissionsBitField(perm.deny) : [],
-                allow: perm.allow ? new PermissionsBitField(perm.allow) : [],
-              });
-            }
-          }
-
-          await guild.channels.create({
-            name: chanData.name,
-            type: chanData.type,
-            parent: parent || null,
-            permissionOverwrites,
-          });
-
-          await delay(300);
-        } catch (e) {
-          console.warn(`Failed to create channel "${chanData.name}":`, e.message);
-        }
-      })
-    );
-  }
-
-  statusEmbed.setTitle('✅ Success')
-    .setDescription(`Successfully applied template: **${template.name}**`)
-    .setColor('Green');
-
-  await interaction.editReply({ embeds: [statusEmbed] });
-}
-
-// === DEPLOY SLASH COMMANDS GLOBALLY ===
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    console.log('Started refreshing application (/) commands globally.');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log('Successfully reloaded application commands.');
-  } catch (error) {
-    console.error('Error while refreshing commands:', error);
-  }
-})();
-
-// === START WEB SERVER FOR RENDER PORT 10000 ===
-const server = createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running\n');
-});
-
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`Server is listening on port ${PORT}`);
-});
-
-// === LOGIN ===
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
-client.login(process.env.TOKEN);
+</body>
+</html>
