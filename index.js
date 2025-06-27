@@ -22,7 +22,6 @@ dotenv.config();
 // Load templates
 const templatesDir = path.join(__dirname, 'templates');
 const templates = {};
-
 try {
   const templateFiles = fs.readdirSync(templatesDir).filter(file => file.endsWith('.json'));
   for (const file of templateFiles) {
@@ -50,7 +49,6 @@ client.commands = new Collection();
 
 // === SLASH COMMAND HANDLER ===
 const commands = [];
-
 const commandData = {
   name: 'template',
   description: 'Apply a server template to this guild.',
@@ -64,14 +62,12 @@ const commandData = {
     },
   ],
 };
-
 commands.push(commandData);
 client.commands.set(commandData.name, {
   execute: async interaction => {
     try {
-      // Only defer once
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.deferReply({ flags: 64 }); // Use flags instead of ephemeral
+        await interaction.deferReply({ flags: 64 });
       }
 
       const templateName = interaction.options.getString('name');
@@ -136,7 +132,6 @@ client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
-
   if (!command) {
     console.error(`Command not found: ${interaction.commandName}`);
     return;
@@ -167,6 +162,7 @@ client.on('interactionCreate', async interaction => {
 
 // === TEMPLATE APPLY FUNCTION ===
 async function applyTemplate(guild, template, interaction) {
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   let statusEmbed = new EmbedBuilder()
     .setTitle('🔄 Resetting Server')
     .setDescription('Deleting all roles and channels...')
@@ -179,33 +175,35 @@ async function applyTemplate(guild, template, interaction) {
 
     await interaction.editReply({ embeds: [statusEmbed] });
 
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
     // Delete all roles except @everyone
-    const roles = guild.roles.cache.filter(r => !r.managed && r.id !== guild.id);
-    await Promise.all(
-      roles.map(async ([id, role]) => {
-        try {
-          await role.delete();
-          await delay(200);
-        } catch (e) {
-          console.warn(`Could not delete role ${role.name}:`, e.message);
-        }
-      })
-    );
+    const roleCache = guild.roles.cache.filter(r => !r.managed && r.id !== guild.id);
+    if (roleCache.size > 0) {
+      await Promise.all(
+        [...roleCache.values()].map(async role => {
+          try {
+            await role.delete();
+            await delay(200);
+          } catch (e) {
+            console.warn(`Could not delete role ${role.name}:`, e.message);
+          }
+        })
+      );
+    }
 
     // Delete all channels
-    const channels = guild.channels.cache;
-    await Promise.all(
-      channels.map(async ([id, channel]) => {
-        try {
-          await channel.delete();
-          await delay(200);
-        } catch (e) {
-          console.warn(`Could not delete channel ${channel.name}:`, e.message);
-        }
-      })
-    );
+    const channelCache = guild.channels.cache;
+    if (channelCache.size > 0) {
+      await Promise.all(
+        [...channelCache.values()].map(async channel => {
+          try {
+            await channel.delete();
+            await delay(200);
+          } catch (e) {
+            console.warn(`Could not delete channel ${channel.name}:`, e.message);
+          }
+        })
+      );
+    }
 
     // Rebuild Roles
     const createdRoles = {};
@@ -282,11 +280,14 @@ async function applyTemplate(guild, template, interaction) {
             }
 
             const permissionOverwrites = [];
-
-            if (chanData.permission_overwrites && Array.isArray(chanData.permission_overwrites)) {
+            if (
+              chanData.permission_overwrites &&
+              Array.isArray(chanData.permission_overwrites)
+            ) {
               for (const perm of chanData.permission_overwrites) {
-                const role = perm.type === 'role' ? createdRoles[perm.id] : perm.id;
-                if (!role && perm.id !== '@everyone') return;
+                const role =
+                  perm.type === 'role' ? createdRoles[perm.id] : perm.id;
+                if (!role && perm.id !== '@everyone') continue;
 
                 permissionOverwrites.push({
                   id: perm.id === '@everyone' ? guild.id : role?.id || guild.id,
@@ -337,15 +338,12 @@ async function applyTemplate(guild, template, interaction) {
 
 // === DEPLOY SLASH COMMANDS GLOBALLY ===
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
 (async () => {
   try {
     console.log('Started refreshing application (/) commands globally.');
-
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
       body: commands,
     });
-
     console.log('Successfully reloaded application commands.');
   } catch (error) {
     console.error('Error while refreshing commands:', error);
@@ -357,7 +355,6 @@ const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Bot is running\n');
 });
-
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
@@ -367,5 +364,4 @@ server.listen(PORT, () => {
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
-
 client.login(process.env.TOKEN);
