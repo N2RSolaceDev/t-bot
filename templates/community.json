@@ -127,50 +127,42 @@
     {
       "name": "faq",
       "type": 0,
-      "parent": "📁┃Information",
-      "permission_overwrites": []
+      "parent": "📁┃Information"
     },
     {
       "name": "chat",
       "type": 0,
-      "parent": "💬┃General Discussion",
-      "permission_overwrites": []
+      "parent": "💬┃General Discussion"
     },
     {
       "name": "voice-chat",
       "type": 2,
-      "parent": "💬┃General Discussion",
-      "permission_overwrites": []
+      "parent": "💬┃General Discussion"
     },
     {
       "name": "valorant-lfp",
       "type": 0,
-      "parent": "🤝┃Looking For Party",
-      "permission_overwrites": []
+      "parent": "🤝┃Looking For Party"
     },
     {
       "name": "apex-lfp",
       "type": 0,
-      "parent": "🤝┃Looking For Party",
-      "permission_overwrites": []
+      "parent": "🤝┃Looking For Party"
     },
     {
       "name": "media",
       "type": 0,
-      "parent": "📷┃Media & Content",
-      "permission_overwrites": []
+      "parent": "📷┃Media & Content"
     },
     {
       "name": "valorant-vc",
       "type": 2,
-      "parent": "🎮┃Gaming Zones",
-      "permission_overwrites": []
+      "parent": "🎮┃Gaming Zones"
     },
     {
       "name": "apex-vc",
       "type": 2,
-      "parent": "🎮┃Gaming Zones",
-      "permission_overwrites": []
+      "parent": "🎮┃Gaming Zones"
     },
     {
       "name": "staff-chat",
