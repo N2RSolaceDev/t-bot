@@ -1,40 +1,21 @@
 {
   "name": "t-bot",
   "version": "1.0.0",
-  "description": "A customizable Discord bot with slash commands, events, and modular structure.",
+  "description": "A powerful Discord bot that applies full server templates.",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --experimental-specifier-resolution=node index.js",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "test": "echo \"No tests yet.\""
+    "start": "node index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/N2RSolaceDev/t-bot.git "
-  },
-  "keywords": [
-    "discord",
-    "bot",
-    "discord.js",
-    "slash-commands",
-    "template"
-  ],
+  "keywords": ["discord", "bot", "server template", "automation"],
   "author": "N2RSolaceDev",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/N2RSolaceDev/t-bot/issues "
-  },
-  "homepage": "https://github.com/N2RSolaceDev/t-bot#readme",
   "dependencies": {
     "discord.js": "^14.15.3",
     "dotenv": "^16.3.1",
-    "winston": "^3.10.0"
-  },
-  "devDependencies": {
-    "eslint": "^8.56.0",
-    "prettier": "^3.2.4"
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "@discordjs/rest": "^1.0.2",
+    "discord-api-types": "^10.4.0"
   }
 }
