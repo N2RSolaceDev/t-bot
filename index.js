@@ -67,12 +67,11 @@ client.commands.set(commandData.name, {
     try {
       // Defer reply once
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({ ephemeral: true });
       }
 
       const templateName = interaction.options.getString('name');
       const template = templates[templateName];
-
       if (!template) {
         return await interaction.editReply({
           embeds: [
@@ -96,6 +95,7 @@ client.commands.set(commandData.name, {
         });
       }
 
+      // Apply template
       await applyTemplate(guild, template, interaction);
     } catch (error) {
       console.error('Unexpected error during execution:', error);
@@ -108,7 +108,7 @@ client.commands.set(commandData.name, {
                 .setDescription('An unexpected error occurred while applying the template.')
                 .setColor('Red'),
             ],
-            flags: 64,
+            ephemeral: true,
           });
         } else {
           await interaction.editReply({
@@ -130,13 +130,11 @@ client.commands.set(commandData.name, {
 // === LISTEN FOR INTERACTIONS ===
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
-
   const command = client.commands.get(interaction.commandName);
   if (!command) {
     console.error(`Command not found: ${interaction.commandName}`);
     return;
   }
-
   try {
     await command.execute(interaction);
   } catch (error) {
@@ -145,7 +143,7 @@ client.on('interactionCreate', async interaction => {
       if (!interaction.replied || !interaction.deferred) {
         await interaction.reply({
           content: 'There was an error while executing this command!',
-          flags: 64,
+          ephemeral: true,
         });
       } else {
         await interaction.editReply({
@@ -163,15 +161,20 @@ client.on('interactionCreate', async interaction => {
 // === TEMPLATE APPLY FUNCTION ===
 async function applyTemplate(guild, template, interaction) {
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
   let statusEmbed = new EmbedBuilder()
     .setTitle('🔄 Resetting Server')
     .setDescription('Deleting all roles and channels...')
     .setColor('Yellow');
 
   try {
+    // Defer first
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.deferReply({ flags: 64 });
+      await interaction.deferReply({ ephemeral: true });
     }
+
+    // Save original channel ID before it gets deleted
+    const originalChannelId = interaction.channelId;
 
     // First reply
     await interaction.editReply({ embeds: [statusEmbed] });
@@ -206,14 +209,26 @@ async function applyTemplate(guild, template, interaction) {
       );
     }
 
+    // Recreate a status channel
+    const statusChannel = await guild.channels.create({
+      name: 'setup-status',
+      type: 0, // Text Channel
+    });
+
+    // Function to send status updates via webhook
+    const webhook = await statusChannel.createWebhook({
+      name: 'Template Status',
+    });
+
+    const sendStatus = async embed => {
+      await webhook.send({
+        embeds: [embed],
+      });
+    };
+
     // Rebuild Roles
     statusEmbed.setTitle('🛠️ Creating Roles').setDescription('Rebuilding roles...');
-    try {
-      await interaction.editReply({ embeds: [statusEmbed] });
-    } catch (e) {
-      console.warn('Interaction expired. Using follow-up.');
-      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
-    }
+    await sendStatus(statusEmbed);
 
     const createdRoles = {};
     if (Array.isArray(template.roles)) {
@@ -224,7 +239,6 @@ async function applyTemplate(guild, template, interaction) {
             if (roleData.permissions) {
               permissions.add(roleData.permissions);
             }
-
             const role = await guild.roles.create({
               name: roleData.name,
               color: roleData.color || 'White',
@@ -232,7 +246,6 @@ async function applyTemplate(guild, template, interaction) {
               position: roleData.position || 1,
               permissions,
             });
-
             createdRoles[roleData.name] = role;
             await delay(200);
           } catch (e) {
@@ -244,11 +257,7 @@ async function applyTemplate(guild, template, interaction) {
 
     // Create Categories
     statusEmbed.setTitle('📁 Creating Categories').setDescription('Setting up categories...');
-    try {
-      await interaction.editReply({ embeds: [statusEmbed] });
-    } catch (e) {
-      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
-    }
+    await sendStatus(statusEmbed);
 
     const categoryMap = {};
     if (Array.isArray(template.categories)) {
@@ -259,7 +268,6 @@ async function applyTemplate(guild, template, interaction) {
               name: catData.name,
               type: 4, // Category
             });
-
             categoryMap[catData.name] = category;
             await delay(300);
           } catch (e) {
@@ -271,11 +279,7 @@ async function applyTemplate(guild, template, interaction) {
 
     // Create Channels
     statusEmbed.setTitle('💬 Creating Channels').setDescription('Creating channels under categories...');
-    try {
-      await interaction.editReply({ embeds: [statusEmbed] });
-    } catch (e) {
-      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
-    }
+    await sendStatus(statusEmbed);
 
     if (Array.isArray(template.channels)) {
       await Promise.all(
@@ -285,7 +289,6 @@ async function applyTemplate(guild, template, interaction) {
             if (chanData.parent && categoryMap[chanData.parent]) {
               parent = categoryMap[chanData.parent];
             }
-
             const permissionOverwrites = [];
             if (
               chanData.permission_overwrites &&
@@ -295,7 +298,6 @@ async function applyTemplate(guild, template, interaction) {
                 const role =
                   perm.type === 'role' ? createdRoles[perm.id] : perm.id;
                 if (!role && perm.id !== '@everyone') continue;
-
                 permissionOverwrites.push({
                   id: perm.id === '@everyone' ? guild.id : role?.id || guild.id,
                   deny: perm.deny ? new PermissionsBitField(perm.deny) : [],
@@ -303,14 +305,12 @@ async function applyTemplate(guild, template, interaction) {
                 });
               }
             }
-
             await guild.channels.create({
               name: chanData.name,
               type: chanData.type,
               parent: parent?.id || null,
               permissionOverwrites,
             });
-
             await delay(300);
           } catch (e) {
             console.warn(`Failed to create channel "${chanData.name}":`, e.message);
@@ -323,11 +323,20 @@ async function applyTemplate(guild, template, interaction) {
     statusEmbed.setTitle('✅ Success')
       .setDescription(`Successfully applied template: **${template.name}**`)
       .setColor('Green');
+    await sendStatus(statusEmbed);
 
+    // Optional: Notify user via ephemeral message
     try {
-      await interaction.editReply({ embeds: [statusEmbed] });
+      await interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('✅ Done')
+            .setDescription('The template has been successfully applied!')
+            .setColor('Green'),
+        ],
+      });
     } catch (e) {
-      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
+      console.warn('Could not update interaction.');
     }
 
   } catch (error) {
@@ -350,7 +359,7 @@ async function applyTemplate(guild, template, interaction) {
               .setDescription('An error occurred while applying the template.')
               .setColor('Red'),
           ],
-          flags: 64,
+          ephemeral: true,
         });
       } catch (followUpError) {
         console.error('Failed to send follow-up:', followUpError.message);
@@ -358,33 +367,3 @@ async function applyTemplate(guild, template, interaction) {
     }
   }
 }
-
-// === DEPLOY SLASH COMMANDS GLOBALLY ===
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-(async () => {
-  try {
-    console.log('Started refreshing application (/) commands globally.');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-      body: commands,
-    });
-    console.log('Successfully reloaded application commands.');
-  } catch (error) {
-    console.error('Error while refreshing commands:', error);
-  }
-})();
-
-// === START WEB SERVER FOR RENDER PORT 10000 ===
-const server = createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running\n');
-});
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`Server is listening on port ${PORT}`);
-});
-
-// === LOGIN ===
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-client.login(process.env.TOKEN);
