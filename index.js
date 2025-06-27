@@ -16,6 +16,7 @@ import { createServer } from 'http';
 const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
 
+// Load environment variables
 dotenv.config();
 
 // Load templates
@@ -26,10 +27,14 @@ try {
   const templateFiles = fs.readdirSync(templatesDir).filter(file => file.endsWith('.json'));
   for (const file of templateFiles) {
     const name = file.split('.')[0];
-    templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
+    try {
+      templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
+    } catch (err) {
+      console.error(`Failed to parse ${file}:`, err.message);
+    }
   }
 } catch (err) {
-  console.error('Error loading templates:', err.message);
+  console.error('Error reading templates directory:', err.message);
 }
 
 // === DISCORD CLIENT ===
@@ -66,8 +71,7 @@ client.commands.set(commandData.name, {
     try {
       // Only defer once
       if (!interaction.replied && !interaction.deferred) {
-        await interaction.deferReply({ ephemeral: true });
-        console.log(`Interaction deferred for ${interaction.commandName}`);
+        await interaction.deferReply({ flags: 64 }); // Use flags instead of ephemeral
       }
 
       const templateName = interaction.options.getString('name');
@@ -98,23 +102,9 @@ client.commands.set(commandData.name, {
 
       await applyTemplate(guild, template, interaction);
     } catch (error) {
-      console.error('Unexpected error:', error);
-
-      if (interaction.replied || interaction.deferred) {
-        try {
-          await interaction.editReply({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle('❌ Unexpected Error')
-                .setDescription('An unexpected error occurred while applying the template.')
-                .setColor('Red'),
-            ],
-          });
-        } catch (editError) {
-          console.error('Failed to send final error reply:', editError);
-        }
-      } else {
-        try {
+      console.error('Unexpected error during execution:', error);
+      try {
+        if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             embeds: [
               new EmbedBuilder()
@@ -122,11 +112,20 @@ client.commands.set(commandData.name, {
                 .setDescription('An unexpected error occurred while applying the template.')
                 .setColor('Red'),
             ],
-            ephemeral: true,
+            flags: 64,
           });
-        } catch (replyError) {
-          console.error('Failed to reply:', replyError);
+        } else {
+          await interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle('❌ Execution Failed')
+                .setDescription('There was an error while applying the template.')
+                .setColor('Red'),
+            ],
+          });
         }
+      } catch (replyError) {
+        console.error('Could not send final reply:', replyError.message);
       }
     }
   },
@@ -139,19 +138,19 @@ client.on('interactionCreate', async interaction => {
   const command = client.commands.get(interaction.commandName);
 
   if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
+    console.error(`Command not found: ${interaction.commandName}`);
     return;
   }
 
   try {
     await command.execute(interaction);
   } catch (error) {
-    console.error(error);
+    console.error(`Error executing command "${interaction.commandName}":`, error);
     try {
-      if (!interaction.replied && !interaction.deferred) {
+      if (!interaction.replied || !interaction.deferred) {
         await interaction.reply({
           content: 'There was an error while executing this command!',
-          ephemeral: true,
+          flags: 64,
         });
       } else {
         await interaction.editReply({
@@ -160,8 +159,8 @@ client.on('interactionCreate', async interaction => {
           components: [],
         });
       }
-    } catch (sendError) {
-      console.error('Could not respond to interaction:', sendError);
+    } catch (editError) {
+      console.error('Failed to respond to interaction:', editError.message);
     }
   }
 });
@@ -175,10 +174,10 @@ async function applyTemplate(guild, template, interaction) {
 
   try {
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
     }
 
-    await interaction.editReply({ embeds: [statusEmbed], components: [] });
+    await interaction.editReply({ embeds: [statusEmbed] });
 
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -210,14 +209,11 @@ async function applyTemplate(guild, template, interaction) {
 
     // Rebuild Roles
     const createdRoles = {};
-    statusEmbed = new EmbedBuilder()
-      .setTitle('🛠️ Creating Roles')
-      .setDescription('Rebuilding roles...')
-      .setColor('Yellow');
-
+    statusEmbed.setTitle('🛠️ Creating Roles');
+    statusEmbed.setDescription('Rebuilding roles...');
     await interaction.editReply({ embeds: [statusEmbed] });
 
-    if (template.roles) {
+    if (Array.isArray(template.roles)) {
       await Promise.all(
         template.roles.map(async roleData => {
           try {
@@ -241,6 +237,8 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
+    } else {
+      console.warn('Template roles are missing or not an array.');
     }
 
     // Create Categories
@@ -249,7 +247,7 @@ async function applyTemplate(guild, template, interaction) {
     statusEmbed.setDescription('Setting up categories...');
     await interaction.editReply({ embeds: [statusEmbed] });
 
-    if (template.categories) {
+    if (Array.isArray(template.categories)) {
       await Promise.all(
         template.categories.map(async catData => {
           try {
@@ -265,6 +263,8 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
+    } else {
+      console.warn('Template categories are missing or not an array.');
     }
 
     // Create Channels
@@ -272,24 +272,24 @@ async function applyTemplate(guild, template, interaction) {
     statusEmbed.setDescription('Creating channels under categories...');
     await interaction.editReply({ embeds: [statusEmbed] });
 
-    if (template.channels) {
+    if (Array.isArray(template.channels)) {
       await Promise.all(
         template.channels.map(async chanData => {
           try {
             let parent = null;
-            if (chanData.parent) {
+            if (chanData.parent && categoryMap[chanData.parent]) {
               parent = categoryMap[chanData.parent];
             }
 
             const permissionOverwrites = [];
 
-            if (chanData.permission_overwrites) {
+            if (chanData.permission_overwrites && Array.isArray(chanData.permission_overwrites)) {
               for (const perm of chanData.permission_overwrites) {
                 const role = perm.type === 'role' ? createdRoles[perm.id] : perm.id;
                 if (!role && perm.id !== '@everyone') return;
 
                 permissionOverwrites.push({
-                  id: perm.id === '@everyone' ? guild.id : role.id,
+                  id: perm.id === '@everyone' ? guild.id : role?.id || guild.id,
                   deny: perm.deny ? new PermissionsBitField(perm.deny) : [],
                   allow: perm.allow ? new PermissionsBitField(perm.allow) : [],
                 });
@@ -299,7 +299,7 @@ async function applyTemplate(guild, template, interaction) {
             await guild.channels.create({
               name: chanData.name,
               type: chanData.type,
-              parent: parent || null,
+              parent: parent?.id || null,
               permissionOverwrites,
             });
 
@@ -309,6 +309,8 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
+    } else {
+      console.warn('Template channels are missing or not an array.');
     }
 
     statusEmbed.setTitle('✅ Success')
@@ -317,7 +319,7 @@ async function applyTemplate(guild, template, interaction) {
 
     await interaction.editReply({ embeds: [statusEmbed] });
   } catch (error) {
-    console.error('Error during template application:', error);
+    console.error('Error applying template:', error);
     try {
       await interaction.editReply({
         embeds: [
@@ -328,7 +330,7 @@ async function applyTemplate(guild, template, interaction) {
         ],
       });
     } catch (editError) {
-      console.error('Could not update interaction:', editError.message);
+      console.error('Failed to update interaction:', editError.message);
     }
   }
 }
@@ -339,7 +341,11 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
   try {
     console.log('Started refreshing application (/) commands globally.');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
+      body: commands,
+    });
+
     console.log('Successfully reloaded application commands.');
   } catch (error) {
     console.error('Error while refreshing commands:', error);
