@@ -1,0 +1,265 @@
+{
+  "name": "community",
+  "roles": [
+    {
+      "name": "Owner",
+      "permissions": ["Administrator"],
+      "color": "DARK_BUT_NOT_BLACK"
+    },
+    {
+      "name": "Head Admin",
+      "permissions": ["ManageGuild", "BanMembers", "KickMembers", "ManageRoles", "ManageChannels", "ManageMessages"],
+      "color": "RED"
+    },
+    {
+      "name": "Admin",
+      "permissions": ["ManageChannels", "KickMembers", "ManageRoles", "ManageMessages"],
+      "color": "ORANGE"
+    },
+    {
+      "name": "Senior Moderator",
+      "permissions": ["MuteMembers", "MoveMembers", "ManageMessages", "ModerateMembers"],
+      "color": "YELLOW"
+    },
+    {
+      "name": "Moderator",
+      "permissions": ["MuteMembers", "MoveMembers", "ReadMessageHistory", "SendMessages"],
+      "color": "GOLD"
+    },
+    {
+      "name": "Trial Moderator",
+      "permissions": ["ReadMessageHistory", "SendMessages"],
+      "color": "BLUE"
+    },
+    {
+      "name": "Helper",
+      "permissions": ["ReadMessageHistory", "SendMessages"],
+      "color": "LIGHT_GREY"
+    },
+    {
+      "name": "Member",
+      "permissions": ["ReadMessageHistory", "SendMessages", "UseApplicationCommands"],
+      "color": "GREEN"
+    },
+    {
+      "name": "Support Team",
+      "permissions": ["ReadMessageHistory", "SendMessages"],
+      "color": "NAVY"
+    },
+    {
+      "name": "VIP",
+      "permissions": ["ReadMessageHistory", "SendMessages", "UseApplicationCommands"],
+      "color": "PURPLE"
+    },
+    {
+      "name": "VIP+",
+      "permissions": ["ReadMessageHistory", "SendMessages", "UseApplicationCommands", "PrioritySpeaker"],
+      "color": "FUCHSIA"
+    },
+    {
+      "name": "MVP",
+      "permissions": ["ReadMessageHistory", "SendMessages", "UseApplicationCommands", "Stream", "PrioritySpeaker"],
+      "color": "LUMINOUS_VIVID_PINK"
+    },
+    {
+      "name": "🤖 Bot",
+      "permissions": ["ViewChannel", "SendMessages", "EmbedLinks", "AttachFiles", "UseApplicationCommands"],
+      "color": "BLURPLE"
+    }
+  ],
+  "categories": [
+    {
+      "name": "📢┃Announcements"
+    },
+    {
+      "name": "🤝┃Looking For Party"
+    },
+    {
+      "name": "💬┃General Discussion"
+    },
+    {
+      "name": "📷┃Media & Content"
+    },
+    {
+      "name": "🎮┃Gaming Zones"
+    },
+    {
+      "name": "📁┃Information"
+    },
+    {
+      "name": "🔐┃Staff Area"
+    }
+  ],
+  "channels": [
+    {
+      "name": "📌┃welcome",
+      "type": 0,
+      "parent": "📢┃Announcements",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["SendMessages"]
+        }
+      ]
+    },
+    {
+      "name": "📢┃announcements",
+      "type": 0,
+      "parent": "📢┃Announcements",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["SendMessages"]
+        }
+      ]
+    },
+    {
+      "name": "📂┃rules",
+      "type": 0,
+      "parent": "📁┃Information",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["SendMessages"]
+        }
+      ]
+    },
+    {
+      "name": "faq",
+      "type": 0,
+      "parent": "📁┃Information"
+    },
+    {
+      "name": "chat",
+      "type": 0,
+      "parent": "💬┃General Discussion"
+    },
+    {
+      "name": "voice-chat",
+      "type": 2,
+      "parent": "💬┃General Discussion"
+    },
+    {
+      "name": "valorant-lfp",
+      "type": 0,
+      "parent": "🤝┃Looking For Party"
+    },
+    {
+      "name": "apex-lfp",
+      "type": 0,
+      "parent": "🤝┃Looking For Party"
+    },
+    {
+      "name": "media",
+      "type": 0,
+      "parent": "📷┃Media & Content"
+    },
+    {
+      "name": "valorant-vc",
+      "type": 2,
+      "parent": "🎮┃Gaming Zones"
+    },
+    {
+      "name": "apex-vc",
+      "type": 2,
+      "parent": "🎮┃Gaming Zones"
+    },
+    {
+      "name": "staff-chat",
+      "type": 0,
+      "parent": "🔐┃Staff Area",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["ViewChannel"]
+        },
+        {
+          "id": "Helper",
+          "allow": ["ViewChannel", "SendMessages"]
+        },
+        {
+          "id": "Moderator",
+          "allow": ["ViewChannel", "SendMessages"]
+        },
+        {
+          "id": "Senior Moderator",
+          "allow": ["ViewChannel", "SendMessages"]
+        },
+        {
+          "id": "Admin",
+          "allow": ["ViewChannel", "SendMessages"]
+        },
+        {
+          "id": "Head Admin",
+          "allow": ["ViewChannel", "SendMessages"]
+        },
+        {
+          "id": "Owner",
+          "allow": ["ViewChannel", "SendMessages"]
+        }
+      ]
+    },
+    {
+      "name": "mod-logs",
+      "type": 0,
+      "parent": "🔐┃Staff Area",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["ViewChannel"]
+        },
+        {
+          "id": "Moderator",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Senior Moderator",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Admin",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Head Admin",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Owner",
+          "allow": ["ViewChannel"]
+        }
+      ]
+    },
+    {
+      "name": "infractions",
+      "type": 0,
+      "parent": "🔐┃Staff Area",
+      "permission_overwrites": [
+        {
+          "id": "@everyone",
+          "deny": ["ViewChannel"]
+        },
+        {
+          "id": "Moderator",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Senior Moderator",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Admin",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Head Admin",
+          "allow": ["ViewChannel"]
+        },
+        {
+          "id": "Owner",
+          "allow": ["ViewChannel"]
+        }
+      ]
+    }
+  ]
+}
