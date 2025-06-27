@@ -44,7 +44,6 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
-
 client.commands = new Collection();
 
 // === SLASH COMMAND HANDLER ===
@@ -66,6 +65,7 @@ commands.push(commandData);
 client.commands.set(commandData.name, {
   execute: async interaction => {
     try {
+      // Defer reply once
       if (!interaction.replied && !interaction.deferred) {
         await interaction.deferReply({ flags: 64 });
       }
@@ -173,9 +173,10 @@ async function applyTemplate(guild, template, interaction) {
       await interaction.deferReply({ flags: 64 });
     }
 
+    // First reply
     await interaction.editReply({ embeds: [statusEmbed] });
 
-    // Delete all roles except @everyone
+    // Delete roles
     const roleCache = guild.roles.cache.filter(r => !r.managed && r.id !== guild.id);
     if (roleCache.size > 0) {
       await Promise.all(
@@ -190,7 +191,7 @@ async function applyTemplate(guild, template, interaction) {
       );
     }
 
-    // Delete all channels
+    // Delete channels
     const channelCache = guild.channels.cache;
     if (channelCache.size > 0) {
       await Promise.all(
@@ -206,11 +207,15 @@ async function applyTemplate(guild, template, interaction) {
     }
 
     // Rebuild Roles
-    const createdRoles = {};
-    statusEmbed.setTitle('🛠️ Creating Roles');
-    statusEmbed.setDescription('Rebuilding roles...');
-    await interaction.editReply({ embeds: [statusEmbed] });
+    statusEmbed.setTitle('🛠️ Creating Roles').setDescription('Rebuilding roles...');
+    try {
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (e) {
+      console.warn('Interaction expired. Using follow-up.');
+      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
+    }
 
+    const createdRoles = {};
     if (Array.isArray(template.roles)) {
       await Promise.all(
         template.roles.map(async roleData => {
@@ -225,7 +230,7 @@ async function applyTemplate(guild, template, interaction) {
               color: roleData.color || 'White',
               hoist: roleData.hoist || false,
               position: roleData.position || 1,
-              permissions: permissions,
+              permissions,
             });
 
             createdRoles[roleData.name] = role;
@@ -235,16 +240,17 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
-    } else {
-      console.warn('Template roles are missing or not an array.');
     }
 
     // Create Categories
-    const categoryMap = {};
-    statusEmbed.setTitle('📁 Creating Categories');
-    statusEmbed.setDescription('Setting up categories...');
-    await interaction.editReply({ embeds: [statusEmbed] });
+    statusEmbed.setTitle('📁 Creating Categories').setDescription('Setting up categories...');
+    try {
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (e) {
+      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
+    }
 
+    const categoryMap = {};
     if (Array.isArray(template.categories)) {
       await Promise.all(
         template.categories.map(async catData => {
@@ -261,14 +267,15 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
-    } else {
-      console.warn('Template categories are missing or not an array.');
     }
 
     // Create Channels
-    statusEmbed.setTitle('💬 Creating Channels');
-    statusEmbed.setDescription('Creating channels under categories...');
-    await interaction.editReply({ embeds: [statusEmbed] });
+    statusEmbed.setTitle('💬 Creating Channels').setDescription('Creating channels under categories...');
+    try {
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (e) {
+      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
+    }
 
     if (Array.isArray(template.channels)) {
       await Promise.all(
@@ -310,15 +317,19 @@ async function applyTemplate(guild, template, interaction) {
           }
         })
       );
-    } else {
-      console.warn('Template channels are missing or not an array.');
     }
 
+    // Final success message
     statusEmbed.setTitle('✅ Success')
       .setDescription(`Successfully applied template: **${template.name}**`)
       .setColor('Green');
 
-    await interaction.editReply({ embeds: [statusEmbed] });
+    try {
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (e) {
+      await interaction.followUp({ embeds: [statusEmbed], flags: 64 });
+    }
+
   } catch (error) {
     console.error('Error applying template:', error);
     try {
@@ -331,7 +342,19 @@ async function applyTemplate(guild, template, interaction) {
         ],
       });
     } catch (editError) {
-      console.error('Failed to update interaction:', editError.message);
+      try {
+        await interaction.followUp({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle('❌ Error')
+              .setDescription('An error occurred while applying the template.')
+              .setColor('Red'),
+          ],
+          flags: 64,
+        });
+      } catch (followUpError) {
+        console.error('Failed to send follow-up:', followUpError.message);
+      }
     }
   }
 }
