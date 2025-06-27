@@ -1,9 +1,16 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v10');
-const fs = require('fs');
-const path = require('path');
+import dotenv from 'dotenv';
+import { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } from 'discord.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v10';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Handle __dirname in ES Module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config();
 
 // Load templates
 const templatesDir = path.join(__dirname, 'templates');
@@ -13,7 +20,7 @@ fs.readdirSync(templatesDir).forEach(file => {
     if (!file.endsWith('.json')) return;
     const name = file.split('.')[0];
     try {
-        templates[name] = require(path.join(templatesDir, file));
+        templates[name] = JSON.parse(fs.readFileSync(path.join(templatesDir, file)));
     } catch (err) {
         console.error(`Failed to load template ${file}:`, err);
     }
@@ -150,7 +157,6 @@ async function applyTemplate(guild, template, interaction) {
                     hoist: roleData.hoist || false,
                     position: roleData.position || 1,
                     permissions: permissions,
-                    mentionable: roleData.mentionable || false,
                 });
 
                 createdRoles[roleData.name] = role;
