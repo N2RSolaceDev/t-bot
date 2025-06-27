@@ -11,11 +11,13 @@ import { Routes } from 'discord-api-types/v10';
 import fs from 'fs';
 import path from 'path';
 import { createServer } from 'http';
+import { fileURLToPath } from 'url';
 
 // Handle __dirname in ES Module
-const __filename = new URL(import.meta.url).pathname;
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load environment variables
 dotenv.config();
 
 // Load templates
@@ -64,7 +66,7 @@ commands.push(commandData);
 client.commands.set(commandData.name, {
   execute: async interaction => {
     await interaction.deferReply({ ephemeral: true });
-    console.log('Interaction deferred');
+    console.log(`Interaction deferred for ${interaction.commandName}`);
 
     const templateName = interaction.options.getString('name');
     const template = templates[templateName];
@@ -108,6 +110,28 @@ client.commands.set(commandData.name, {
   },
 });
 
+// === LISTEN FOR INTERACTIONS ===
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const command = client.commands.get(interaction.commandName);
+
+  if (!command) {
+    console.error(`No command matching ${interaction.commandName} was found.`);
+    return;
+  }
+
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    await interaction.reply({
+      content: 'There was an error while executing this command!',
+      ephemeral: true,
+    });
+  }
+});
+
 // === TEMPLATE APPLY FUNCTION ===
 async function applyTemplate(guild, template, interaction) {
   const statusEmbed = new EmbedBuilder()
@@ -124,7 +148,7 @@ async function applyTemplate(guild, template, interaction) {
   for (const [id, role] of roles) {
     try {
       await role.delete();
-      await delay(500);
+      await delay(500); // Rate limit safety
     } catch (e) {
       console.warn(`Could not delete role ${role.name}:`, e.message);
     }
@@ -141,10 +165,8 @@ async function applyTemplate(guild, template, interaction) {
     }
   }
 
-  // === REBUILD ===
+  // Rebuild Roles
   const createdRoles = {};
-  const everyoneRole = guild.roles.everyone;
-
   statusEmbed.setTitle('🛠️ Creating Roles');
   statusEmbed.setDescription('Rebuilding roles...');
   await interaction.editReply({ embeds: [statusEmbed] });
@@ -173,18 +195,18 @@ async function applyTemplate(guild, template, interaction) {
     }
   }
 
+  // Create Categories
+  const categoryMap = {};
   statusEmbed.setTitle('📁 Creating Categories');
   statusEmbed.setDescription('Setting up categories...');
   await interaction.editReply({ embeds: [statusEmbed] });
-
-  const categoryMap = {};
 
   if (template.categories) {
     for (const catData of template.categories) {
       try {
         const category = await guild.channels.create({
           name: catData.name,
-          type: 4,
+          type: 4, // Category
         });
 
         categoryMap[catData.name] = category;
@@ -195,6 +217,7 @@ async function applyTemplate(guild, template, interaction) {
     }
   }
 
+  // Create Channels
   statusEmbed.setTitle('💬 Creating Channels');
   statusEmbed.setDescription('Creating channels under categories...');
   await interaction.editReply({ embeds: [statusEmbed] });
@@ -260,7 +283,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   }
 })();
 
-// === START WEB SERVER FOR PORT 10000 ===
+// === START WEB SERVER FOR RENDER PORT 10000 ===
 const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Bot is running\n');
