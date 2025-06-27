@@ -1,21 +1,40 @@
 {
   "name": "t-bot",
   "version": "1.0.0",
-  "description": "A powerful Discord bot that applies full server templates.",
+  "description": "A powerful Discord bot that applies full server templates to guilds.",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --experimental-specifier-resolution=node index.js",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
-  "keywords": ["discord", "bot", "server template", "automation"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/N2RSolaceDev/t-bot.git "
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "server template",
+    "automation",
+    "discord.js"
+  ],
   "author": "N2RSolaceDev",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/N2RSolaceDev/t-bot/issues "
+  },
+  "homepage": "https://github.com/N2RSolaceDev/t-bot#readme",
   "dependencies": {
     "discord.js": "^14.15.3",
-    "dotenv": "^16.3.1",
-    "fs": "^0.0.1-security",
-    "path": "^0.12.7",
     "@discordjs/rest": "^1.0.2",
-    "discord-api-types": "^10.4.0"
+    "discord-api-types": "^10.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4"
   }
 }
