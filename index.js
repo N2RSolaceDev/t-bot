@@ -386,5 +386,8 @@ client.on('messageCreate', async (message) => {
 // ========================
 // 🧪 LOGIN
 // ========================
+app.listen(PORT, () => {
+  console.log(`🌐 Listening on port ${PORT}`);
+});
 
 client.login(TOKEN);
