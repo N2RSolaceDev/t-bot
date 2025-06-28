@@ -1,13 +1,15 @@
-// === MODULE IMPORTS ===
 import express from 'express';
 import { config } from 'dotenv';
 
+// Load environment variables
+config();
+
+// Discord bot imports
 import {
   Client,
   GatewayIntentBits,
   PermissionFlagsBits,
 } from 'discord.js';
-
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -15,13 +17,11 @@ import {
   ButtonStyle,
 } from 'discord.js';
 
-// === ENV CONFIG ===
-config(); // Load .env variables
-
+// Initialize Express server
 const app = express();
-const PORT = parseInt(process.env.PORT, 10) || 1000;
+const PORT = parseInt(process.env.PORT || '10000');
 
-// === DISCORD BOT ===
+// Create Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -44,73 +44,15 @@ const {
   REPORTS_CHANNEL_ID,
   STAFF_ROLE_ID,
   TICKET_CATEGORY_NAME,
-  PANEL_CHANNEL_ID,
 } = process.env;
 
 // ========================
 // 🤖 BOT READY
 // ========================
 
-client.once('ready', async () => {
+client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   console.log('🤖 CaughtWiki Bot is now online!');
-
-  const panelChannel = client.channels.cache.get(PANEL_CHANNEL_ID);
-  if (!panelChannel) return console.error('❌ Panel channel not found.');
-
-  // Create buttons
-  const supportButton = new ButtonBuilder()
-    .setCustomId('ticket_support')
-    .setLabel('🛠️ Support')
-    .setStyle(ButtonStyle.Primary);
-
-  const applyButton = new ButtonBuilder()
-    .setCustomId('ticket_apply')
-    .setLabel('📝 Apply')
-    .setStyle(ButtonStyle.Success);
-
-  const reportButton = new ButtonBuilder()
-    .setCustomId('ticket_report')
-    .setLabel('🚨 Report')
-    .setStyle(ButtonStyle.Danger);
-
-  const appealButton = new ButtonBuilder()
-    .setCustomId('ticket_appeal')
-    .setLabel('⚖️ Appeal')
-    .setStyle(ButtonStyle.Secondary);
-
-  const row = new ActionRowBuilder().addComponents(
-    supportButton,
-    applyButton,
-    reportButton,
-    appealButton
-  );
-
-  const embed = new EmbedBuilder()
-    .setTitle('🎫 Open a Ticket')
-    .setDescription('Click one of the buttons below to open a ticket.')
-    .setColor(0x3498db)
-    .setTimestamp();
-
-  // Check for existing panel message
-  try {
-    const messages = await panelChannel.messages.fetch({ limit: 10 });
-    const existingMessage = messages.find(
-      (msg) =>
-        msg.author.id === client.user.id &&
-        msg.embeds[0]?.title === '🎫 Open a Ticket'
-    );
-
-    if (existingMessage) {
-      await existingMessage.edit({ embeds: [embed], components: [row] });
-      console.log('📎 Existing ticket panel updated.');
-    } else {
-      await panelChannel.send({ embeds: [embed], components: [row] });
-      console.log('📩 New ticket panel sent.');
-    }
-  } catch (error) {
-    console.error('❌ Error updating/sending panel:', error.message);
-  }
 });
 
 // ========================
@@ -165,141 +107,147 @@ client.on('messageCreate', async (message) => {
       .setDescription('Here are the available commands:')
       .addFields(
         { name: '.help', value: 'Shows this help menu.' },
-        { name: '.report @user <reason>', value: 'Opens a ticket and logs a report.' }
+        { name: '.report @user <reason>', value: 'Opens a private report ticket with staff.' },
+        { name: '.purge [amount]', value: 'Deletes a number of messages (Staff only).' },
+        { name: '.ban @user [reason]', value: 'Bans a user (Staff only).' },
+        { name: '.kick @user [reason]', value: 'Kicks a user (Staff only).' },
+        { name: '.mute @user [reason]', value: 'Mutes a user (Staff only).' },
+        { name: '.unmute @user', value: 'Unmutes a user (Staff only).' }
       )
       .setColor(0xf1c40f)
       .setTimestamp();
 
     await message.reply({ embeds: [helpEmbed], ephemeral: true });
   }
-});
 
-// ========================
-// 🎟️ BUTTON INTERACTIONS
-// ========================
+  // ========================
+  // 🗑️ PURGE COMMAND
+  // ========================
 
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return;
-  const buttonType = interaction.customId;
-
-  if (
-    ['ticket_support', 'ticket_apply', 'ticket_report', 'ticket_appeal'].includes(
-      buttonType
-    )
-  ) {
-    const guild = interaction.guild;
-
-    let category = guild.channels.cache.find(
-      (ch) => ch.type === 4 && ch.name === TICKET_CATEGORY_NAME
-    );
-
-    if (!category) {
-      category = await guild.channels.create({
-        name: TICKET_CATEGORY_NAME,
-        type: 4,
-      });
+  if (command === 'purge') {
+    if (
+      !message.member.roles.cache.has(STAFF_ROLE_ID)
+    ) {
+      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
     }
 
-    // Check for existing ticket
-    const existingChannel = guild.channels.cache.find(
-      (ch) =>
-        ch.parent?.id === category.id &&
-        ch.name.includes(interaction.user.username.toLowerCase())
-    );
-
-    if (existingChannel) {
-      return interaction.reply({
-        content: 'You already have an open ticket!',
-        ephemeral: true,
-      });
+    const amount = parseInt(args[0]);
+    if (isNaN(amount) || amount <= 0 || amount > 100) {
+      return message.reply({ content: '❗ Please specify a number between 1 and 100.', ephemeral: true });
     }
 
-    // Create new ticket
-    const ticketType =
-      buttonType === 'ticket_support'
-        ? 'Support'
-        : buttonType === 'ticket_apply'
-        ? 'Apply'
-        : buttonType === 'ticket_report'
-        ? 'Report'
-        : 'Appeal';
-
-    const channel = await guild.channels.create({
-      name: `ticket-${interaction.user.username}`,
-      type: 0,
-      parent: category.id,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: interaction.user.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: STAFF_ROLE_ID,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-      ],
-    });
-
+    await message.channel.bulkDelete(amount, true);
     const embed = new EmbedBuilder()
-      .setTitle(`📩 New ${ticketType} Ticket`)
-      .setDescription(
-        `Hello ${interaction.user}, a staff member will assist you shortly.`
-      )
+      .setTitle('🗑️ Messages Purged')
+      .setDescription(`✅ Cleared **${amount}** messages.`)
+      .setColor(0xe67e22)
+      .setFooter({ text: `Requested by ${message.author.username}` })
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [embed] });
+  }
+
+  // ========================
+  // ⚠️ BAN COMMAND
+  // ========================
+
+  if (command === 'ban') {
+    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
+      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    }
+
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const reason = args.slice(1).join(' ') || 'No reason provided.';
+
+    if (!target) {
+      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+    }
+
+    await target.ban({ reason });
+    const embed = new EmbedBuilder()
+      .setTitle('🔨 User Banned')
+      .setDescription(`<@${target.id}> has been banned.\n**Reason:** ${reason}`)
+      .setColor(0xc0392b)
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  // ========================
+  // ⚠️ KICK COMMAND
+  // ========================
+
+  if (command === 'kick') {
+    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
+      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    }
+
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const reason = args.slice(1).join(' ') || 'No reason provided.';
+
+    if (!target) {
+      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+    }
+
+    await target.kick(reason);
+    const embed = new EmbedBuilder()
+      .setTitle('👢 User Kicked')
+      .setDescription(`<@${target.id}> has been kicked.\n**Reason:** ${reason}`)
+      .setColor(0xe67e22)
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  // ========================
+  // ⚠️ MUTE / TIMEOUT
+  // ========================
+
+  if (command === 'mute') {
+    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
+      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    }
+
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const reason = args.slice(1).join(' ') || 'No reason provided.';
+
+    if (!target) {
+      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+    }
+
+    await target.timeout(604800000, reason); // 7 days
+    const embed = new EmbedBuilder()
+      .setTitle('⚠️ Member Muted')
+      .setDescription(`<@${target.id}> has been muted.\n**Reason:** ${reason}`)
+      .setColor(0xf39c12)
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  // ========================
+  // ⚠️ UNMUTE / TIMEOUT REMOVE
+  // ========================
+
+  if (command === 'unmute') {
+    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
+      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    }
+
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+
+    if (!target) {
+      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+    }
+
+    await target.timeout(null);
+    const embed = new EmbedBuilder()
+      .setTitle('✅ Member Unmuted')
+      .setDescription(`<@${target.id}> has been unmuted.`)
       .setColor(0x2ecc71)
       .setTimestamp();
 
-    const closeButton = new ButtonBuilder()
-      .setCustomId('close_ticket')
-      .setLabel('🔒 Close Ticket')
-      .setStyle(ButtonStyle.Danger);
-
-    const closeRow = new ActionRowBuilder().addComponents(closeButton);
-
-    await channel.send({ embeds: [embed], components: [closeRow] });
-
-    await interaction.reply({
-      content: `Your ticket has been created: ${channel}`,
-      ephemeral: true,
-    });
-  }
-
-  // ========================
-  // 🧾 CLOSE TICKET BUTTON
-  // ========================
-
-  if (interaction.customId === 'close_ticket') {
-    const confirmButton = new ButtonBuilder()
-      .setCustomId('confirm_close')
-      .setLabel('✅ Confirm')
-      .setStyle(ButtonStyle.Success);
-
-    const cancelButton = new ButtonBuilder()
-      .setCustomId('cancel_close')
-      .setLabel('❌ Cancel')
-      .setStyle(ButtonStyle.Secondary);
-
-    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
-
-    const replyEmbed = new EmbedBuilder()
-      .setTitle('⚠️ Confirm Closure')
-      .setDescription('Are you sure you want to close this ticket?')
-      .setColor(0xe74c3c)
-      .setTimestamp();
-
-    await interaction.reply({ embeds: [replyEmbed], components: [row], ephemeral: true });
-  }
-
-  if (interaction.customId === 'confirm_close') {
-    const channel = interaction.channel;
-    await channel.delete();
-  }
-
-  if (interaction.customId === 'cancel_close') {
-    await interaction.message.delete();
+    await message.reply({ embeds: [embed], ephemeral: true });
   }
 });
 
@@ -330,7 +278,7 @@ client.on('messageCreate', async (message) => {
       return message.reply({ content: 'Report channel not found.', ephemeral: true });
     }
 
-    // Create or find ticket category
+    // Find or create ticket category
     let category = guild.channels.cache.find(
       (ch) => ch.type === 4 && ch.name === TICKET_CATEGORY_NAME
     );
@@ -371,12 +319,12 @@ client.on('messageCreate', async (message) => {
       .setColor(0xe74c3c)
       .setTimestamp();
 
-    const closeBtn = new ButtonBuilder()
+    const closeButton = new ButtonBuilder()
       .setCustomId('close_ticket')
       .setLabel('🔒 Close Ticket')
       .setStyle(ButtonStyle.Danger);
 
-    const row = new ActionRowBuilder().addComponents(closeBtn);
+    const row = new ActionRowBuilder().addComponents(closeButton);
 
     await channel.send({ embeds: [embed], components: [row] });
 
@@ -395,6 +343,45 @@ client.on('messageCreate', async (message) => {
       .setTimestamp();
 
     await reportsChannel.send({ embeds: [logEmbed] });
+  }
+});
+
+// ========================
+// 🧾 CLOSE TICKET BUTTON
+// ========================
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  if (interaction.customId === 'close_ticket') {
+    const confirmButton = new ButtonBuilder()
+      .setCustomId('confirm_close')
+      .setLabel('✅ Confirm')
+      .setStyle(ButtonStyle.Success);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId('cancel_close')
+      .setLabel('❌ Cancel')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+    const replyEmbed = new EmbedBuilder()
+      .setTitle('⚠️ Confirm Closure')
+      .setDescription('Are you sure you want to close this ticket?')
+      .setColor(0xe74c3c)
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [replyEmbed], components: [row], ephemeral: true });
+  }
+
+  if (interaction.customId === 'confirm_close') {
+    const channel = interaction.channel;
+    await channel.delete();
+  }
+
+  if (interaction.customId === 'cancel_close') {
+    await interaction.message.delete();
   }
 });
 
