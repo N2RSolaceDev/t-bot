@@ -1,5 +1,13 @@
-import 'dotenv/config';
-import { Client, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+// === MODULE IMPORTS ===
+import express from 'express';
+import { config } from 'dotenv';
+
+import {
+  Client,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+} from 'discord.js';
+
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -7,6 +15,13 @@ import {
   ButtonStyle,
 } from 'discord.js';
 
+// === ENV CONFIG ===
+config(); // Load .env variables
+
+const app = express();
+const PORT = parseInt(process.env.PORT, 10) || 1000;
+
+// === DISCORD BOT ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -165,14 +180,12 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
-
   const buttonType = interaction.customId;
 
   if (
-    buttonType === 'ticket_support' ||
-    buttonType === 'ticket_apply' ||
-    buttonType === 'ticket_report' ||
-    buttonType === 'ticket_appeal'
+    ['ticket_support', 'ticket_apply', 'ticket_report', 'ticket_appeal'].includes(
+      buttonType
+    )
   ) {
     const guild = interaction.guild;
 
@@ -233,7 +246,9 @@ client.on('interactionCreate', async (interaction) => {
 
     const embed = new EmbedBuilder()
       .setTitle(`📩 New ${ticketType} Ticket`)
-      .setDescription(`Hello ${interaction.user}, a staff member will assist you shortly.`)
+      .setDescription(
+        `Hello ${interaction.user}, a staff member will assist you shortly.`
+      )
       .setColor(0x2ecc71)
       .setTimestamp();
 
@@ -384,10 +399,19 @@ client.on('messageCreate', async (message) => {
 });
 
 // ========================
-// 🧪 LOGIN
+// 🌐 EXPRESS SERVER FOR RENDER
 // ========================
+
+app.get('/', (req, res) => {
+  res.send('CaughtWiki Bot is Online!');
+});
+
 app.listen(PORT, () => {
   console.log(`🌐 Listening on port ${PORT}`);
 });
+
+// ========================
+// 🧪 LOGIN
+// ========================
 
 client.login(TOKEN);
