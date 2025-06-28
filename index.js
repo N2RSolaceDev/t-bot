@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} from 'discord.js';
 
 const client = new Client({
   intents: [
@@ -24,15 +29,73 @@ const {
   REPORTS_CHANNEL_ID,
   STAFF_ROLE_ID,
   TICKET_CATEGORY_NAME,
+  PANEL_CHANNEL_ID,
 } = process.env;
 
 // ========================
 // 🤖 BOT READY
 // ========================
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   console.log('🤖 CaughtWiki Bot is now online!');
+
+  const panelChannel = client.channels.cache.get(PANEL_CHANNEL_ID);
+  if (!panelChannel) return console.error('❌ Panel channel not found.');
+
+  // Create buttons
+  const supportButton = new ButtonBuilder()
+    .setCustomId('ticket_support')
+    .setLabel('🛠️ Support')
+    .setStyle(ButtonStyle.Primary);
+
+  const applyButton = new ButtonBuilder()
+    .setCustomId('ticket_apply')
+    .setLabel('📝 Apply')
+    .setStyle(ButtonStyle.Success);
+
+  const reportButton = new ButtonBuilder()
+    .setCustomId('ticket_report')
+    .setLabel('🚨 Report')
+    .setStyle(ButtonStyle.Danger);
+
+  const appealButton = new ButtonBuilder()
+    .setCustomId('ticket_appeal')
+    .setLabel('⚖️ Appeal')
+    .setStyle(ButtonStyle.Secondary);
+
+  const row = new ActionRowBuilder().addComponents(
+    supportButton,
+    applyButton,
+    reportButton,
+    appealButton
+  );
+
+  const embed = new EmbedBuilder()
+    .setTitle('🎫 Open a Ticket')
+    .setDescription('Click one of the buttons below to open a ticket.')
+    .setColor(0x3498db)
+    .setTimestamp();
+
+  // Check for existing panel message
+  try {
+    const messages = await panelChannel.messages.fetch({ limit: 10 });
+    const existingMessage = messages.find(
+      (msg) =>
+        msg.author.id === client.user.id &&
+        msg.embeds[0]?.title === '🎫 Open a Ticket'
+    );
+
+    if (existingMessage) {
+      await existingMessage.edit({ embeds: [embed], components: [row] });
+      console.log('📎 Existing ticket panel updated.');
+    } else {
+      await panelChannel.send({ embeds: [embed], components: [row] });
+      console.log('📩 New ticket panel sent.');
+    }
+  } catch (error) {
+    console.error('❌ Error updating/sending panel:', error.message);
+  }
 });
 
 // ========================
@@ -72,36 +135,51 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ========================
-// 🎟️ TICKET SYSTEM (Buttons Only)
+// 📜 HELP COMMAND
 // ========================
 
-const ticketButton = new ButtonBuilder()
-  .setCustomId('open_ticket')
-  .setLabel('📩 Open Ticket')
-  .setStyle(ButtonStyle.Primary);
+client.on('messageCreate', async (message) => {
+  if (!message.content.startsWith('.') || message.author.bot) return;
 
-const ticketEmbed = new EmbedBuilder()
-  .setTitle('🎟️ Support Tickets')
-  .setDescription('Click the button below to open a private ticket with staff.')
-  .setColor(0x3498db);
+  const args = message.content.slice(1).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
 
-const ticketRow = new ActionRowBuilder().addComponents(ticketButton);
+  if (command === 'help') {
+    const helpEmbed = new EmbedBuilder()
+      .setTitle('📚 Help Center')
+      .setDescription('Here are the available commands:')
+      .addFields(
+        { name: '.help', value: 'Shows this help menu.' },
+        { name: '.report @user <reason>', value: 'Opens a ticket and logs a report.' }
+      )
+      .setColor(0xf1c40f)
+      .setTimestamp();
+
+    await message.reply({ embeds: [helpEmbed], ephemeral: true });
+  }
+});
+
+// ========================
+// 🎟️ BUTTON INTERACTIONS
+// ========================
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
 
-  // ========================
-  // 🎟️ OPEN TICKET BUTTON
-  // ========================
+  const buttonType = interaction.customId;
 
-  if (interaction.customId === 'open_ticket') {
+  if (
+    buttonType === 'ticket_support' ||
+    buttonType === 'ticket_apply' ||
+    buttonType === 'ticket_report' ||
+    buttonType === 'ticket_appeal'
+  ) {
     const guild = interaction.guild;
 
     let category = guild.channels.cache.find(
       (ch) => ch.type === 4 && ch.name === TICKET_CATEGORY_NAME
     );
 
-    // Create category if not exists
     if (!category) {
       category = await guild.channels.create({
         name: TICKET_CATEGORY_NAME,
@@ -109,11 +187,10 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
 
-    // Check if user already has a ticket
+    // Check for existing ticket
     const existingChannel = guild.channels.cache.find(
       (ch) =>
-        ch.parent &&
-        ch.parent.id === category.id &&
+        ch.parent?.id === category.id &&
         ch.name.includes(interaction.user.username.toLowerCase())
     );
 
@@ -124,7 +201,16 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
 
-    // Create new ticket channel
+    // Create new ticket
+    const ticketType =
+      buttonType === 'ticket_support'
+        ? 'Support'
+        : buttonType === 'ticket_apply'
+        ? 'Apply'
+        : buttonType === 'ticket_report'
+        ? 'Report'
+        : 'Appeal';
+
     const channel = await guild.channels.create({
       name: `ticket-${interaction.user.username}`,
       type: 0,
@@ -146,18 +232,19 @@ client.on('interactionCreate', async (interaction) => {
     });
 
     const embed = new EmbedBuilder()
-      .setTitle('📩 New Ticket Created')
+      .setTitle(`📩 New ${ticketType} Ticket`)
       .setDescription(`Hello ${interaction.user}, a staff member will assist you shortly.`)
-      .setColor(0x2ecc71);
+      .setColor(0x2ecc71)
+      .setTimestamp();
 
     const closeButton = new ButtonBuilder()
       .setCustomId('close_ticket')
       .setLabel('🔒 Close Ticket')
       .setStyle(ButtonStyle.Danger);
 
-    const row = new ActionRowBuilder().addComponents(closeButton);
+    const closeRow = new ActionRowBuilder().addComponents(closeButton);
 
-    await channel.send({ embeds: [embed], components: [row] });
+    await channel.send({ embeds: [embed], components: [closeRow] });
 
     await interaction.reply({
       content: `Your ticket has been created: ${channel}`,
@@ -185,7 +272,8 @@ client.on('interactionCreate', async (interaction) => {
     const replyEmbed = new EmbedBuilder()
       .setTitle('⚠️ Confirm Closure')
       .setDescription('Are you sure you want to close this ticket?')
-      .setColor(0xe74c3c);
+      .setColor(0xe74c3c)
+      .setTimestamp();
 
     await interaction.reply({ embeds: [replyEmbed], components: [row], ephemeral: true });
   }
@@ -201,7 +289,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ========================
-// 📝 REPORT COMMAND (.report {user} {reason})
+// 📝 REPORT COMMAND (.report @user reason)
 // ========================
 
 client.on('messageCreate', async (message) => {
@@ -265,7 +353,8 @@ client.on('messageCreate', async (message) => {
       .setDescription(
         `Filed by: <@${message.author.id}> (${message.author.tag})\nTarget: ${targetUser}\nReason: ${reason}`
       )
-      .setColor(0xe74c3c);
+      .setColor(0xe74c3c)
+      .setTimestamp();
 
     const closeBtn = new ButtonBuilder()
       .setCustomId('close_ticket')
@@ -292,24 +381,6 @@ client.on('messageCreate', async (message) => {
 
     await reportsChannel.send({ embeds: [logEmbed] });
   }
-});
-
-// ========================
-// 📩 STARTUP MESSAGES CHANNEL
-// ========================
-
-client.on('guildCreate', async (guild) => {
-  const general = guild.channels.cache.find((ch) => ch.type === 0);
-  if (!general) return;
-
-  const embed = new EmbedBuilder()
-    .setTitle('🎟️ Ticket System Ready')
-    .setDescription('Click the button below to open a ticket with staff.')
-    .setColor(0x2ecc71);
-
-  const row = new ActionRowBuilder().addComponents(ticketButton);
-
-  await general.send({ embeds: [embed], components: [row] });
 });
 
 // ========================
