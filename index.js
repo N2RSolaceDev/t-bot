@@ -1,13 +1,6 @@
-require('dotenv').config();
-const {
-  Client,
-  GatewayIntentBits,
-  PermissionFlagsBits,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-} = require('discord.js');
+import 'dotenv/config';
+import { Client, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 const client = new Client({
   intents: [
