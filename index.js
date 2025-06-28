@@ -46,6 +46,14 @@ const {
   TICKET_CATEGORY_NAME,
 } = process.env;
 
+// Helper: Check if user has Administrator or specific permission
+function hasPermission(member, permission) {
+  return (
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.permissions.has(permission)
+  );
+}
+
 // ========================
 // 🤖 BOT READY
 // ========================
@@ -92,7 +100,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ========================
-// 📜 HELP COMMAND
+// 📜 HELP & MODERATION COMMANDS
 // ========================
 
 client.on('messageCreate', async (message) => {
@@ -101,6 +109,14 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(1).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
+  // Only allow if member exists
+  const member = message.member;
+  if (!member) return;
+
+  // ========================
+  // 📜 HELP COMMAND
+  // ========================
+
   if (command === 'help') {
     const helpEmbed = new EmbedBuilder()
       .setTitle('📚 Help Center')
@@ -108,11 +124,11 @@ client.on('messageCreate', async (message) => {
       .addFields(
         { name: '.help', value: 'Shows this help menu.' },
         { name: '.report @user <reason>', value: 'Opens a private report ticket with staff.' },
-        { name: '.purge [amount]', value: 'Deletes a number of messages (Staff only).' },
-        { name: '.ban @user [reason]', value: 'Bans a user (Staff only).' },
-        { name: '.kick @user [reason]', value: 'Kicks a user (Staff only).' },
-        { name: '.mute @user [reason]', value: 'Mutes a user (Staff only).' },
-        { name: '.unmute @user', value: 'Unmutes a user (Staff only).' }
+        { name: '.purge [amount]', value: 'Deletes messages (requires ManageMessages).' },
+        { name: '.ban @user [reason]', value: 'Bans a user (requires BanMembers).' },
+        { name: '.kick @user [reason]', value: 'Kicks a user (requires KickMembers).' },
+        { name: '.mute @user [reason]', value: 'Mutes a user (requires ModerateMembers).' },
+        { name: '.unmute @user', value: 'Unmutes a user (requires ModerateMembers).' }
       )
       .setColor(0xf1c40f)
       .setTimestamp();
@@ -125,15 +141,19 @@ client.on('messageCreate', async (message) => {
   // ========================
 
   if (command === 'purge') {
-    if (
-      !message.member.roles.cache.has(STAFF_ROLE_ID)
-    ) {
-      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    if (!hasPermission(member, PermissionFlagsBits.ManageMessages)) {
+      return message.reply({
+        content: "🚫 You don't have permission to purge messages.",
+        ephemeral: true,
+      });
     }
 
     const amount = parseInt(args[0]);
     if (isNaN(amount) || amount <= 0 || amount > 100) {
-      return message.reply({ content: '❗ Please specify a number between 1 and 100.', ephemeral: true });
+      return message.reply({
+        content: '❗ Please specify a number between 1 and 100.',
+        ephemeral: true,
+      });
     }
 
     await message.channel.bulkDelete(amount, true);
@@ -152,15 +172,21 @@ client.on('messageCreate', async (message) => {
   // ========================
 
   if (command === 'ban') {
-    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
-      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    if (!hasPermission(member, PermissionFlagsBits.BanMembers)) {
+      return message.reply({
+        content: "🚫 You don't have permission to ban users.",
+        ephemeral: true,
+      });
     }
 
-    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]).catch(() => null);
     const reason = args.slice(1).join(' ') || 'No reason provided.';
 
     if (!target) {
-      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+      return message.reply({
+        content: '❗ Please mention a valid user.',
+        ephemeral: true,
+      });
     }
 
     await target.ban({ reason });
@@ -178,15 +204,21 @@ client.on('messageCreate', async (message) => {
   // ========================
 
   if (command === 'kick') {
-    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
-      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    if (!hasPermission(member, PermissionFlagsBits.KickMembers)) {
+      return message.reply({
+        content: "🚫 You don't have permission to kick users.",
+        ephemeral: true,
+      });
     }
 
-    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]).catch(() => null);
     const reason = args.slice(1).join(' ') || 'No reason provided.';
 
     if (!target) {
-      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+      return message.reply({
+        content: '❗ Please mention a valid user.',
+        ephemeral: true,
+      });
     }
 
     await target.kick(reason);
@@ -204,18 +236,24 @@ client.on('messageCreate', async (message) => {
   // ========================
 
   if (command === 'mute') {
-    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
-      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    if (!hasPermission(member, PermissionFlagsBits.ModerateMembers)) {
+      return message.reply({
+        content: "🚫 You don't have permission to mute users.",
+        ephemeral: true,
+      });
     }
 
-    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]).catch(() => null);
     const reason = args.slice(1).join(' ') || 'No reason provided.';
 
     if (!target) {
-      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+      return message.reply({
+        content: '❗ Please mention a valid user.',
+        ephemeral: true,
+      });
     }
 
-    await target.timeout(604800000, reason); // 7 days
+    await target.timeout(604800000, reason); // 7 days timeout
     const embed = new EmbedBuilder()
       .setTitle('⚠️ Member Muted')
       .setDescription(`<@${target.id}> has been muted.\n**Reason:** ${reason}`)
@@ -226,18 +264,24 @@ client.on('messageCreate', async (message) => {
   }
 
   // ========================
-  // ⚠️ UNMUTE / TIMEOUT REMOVE
+  // ⚠️ UNMUTE / REMOVE TIMEOUT
   // ========================
 
   if (command === 'unmute') {
-    if (!message.member.roles.cache.has(STAFF_ROLE_ID)) {
-      return message.reply({ content: "🚫 You don't have permission to use this.", ephemeral: true });
+    if (!hasPermission(member, PermissionFlagsBits.ModerateMembers)) {
+      return message.reply({
+        content: "🚫 You don't have permission to unmute users.",
+        ephemeral: true,
+      });
     }
 
-    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]);
+    const target = message.mentions.members?.first() || await message.guild.members.fetch(args[0]).catch(() => null);
 
     if (!target) {
-      return message.reply({ content: '❗ Please mention a valid user.', ephemeral: true });
+      return message.reply({
+        content: '❗ Please mention a valid user.',
+        ephemeral: true,
+      });
     }
 
     await target.timeout(null);
@@ -275,7 +319,10 @@ client.on('messageCreate', async (message) => {
     const guild = message.guild;
     const reportsChannel = guild.channels.cache.get(REPORTS_CHANNEL_ID);
     if (!reportsChannel) {
-      return message.reply({ content: 'Report channel not found.', ephemeral: true });
+      return message.reply({
+        content: 'Report channel not found.',
+        ephemeral: true,
+      });
     }
 
     // Find or create ticket category
